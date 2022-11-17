@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.interceptor.DefaultTransactionAttribute;
 
@@ -74,6 +75,24 @@ public class BasicTxTest {
         TransactionStatus tx2 = txManager.getTransaction(new DefaultTransactionAttribute());
         log.info("트랜잭션2 롤백");
         txManager.rollback(tx2);
+    }
+
+    @Test
+    void inner_commit() {
+        log.info("외부 트랜잭션 시작");
+        TransactionStatus outer = txManager.getTransaction(new DefaultTransactionAttribute());
+        log.info("outer.isNewTransaction()={}", outer.isNewTransaction());  // 처음 수행된 트랜잭션인지 여부 : true
+
+        log.info("내부 트랜잭션 시작");
+        TransactionStatus inner = txManager.getTransaction(new DefaultTransactionAttribute());
+        log.info("inner.isNewTransaction()={}", inner.isNewTransaction());  // 처음 수행된 트랜잭션인지 여부 : false -> 외부 트랜잭션의 커넥션 사용
+        // o.s.j.d.DataSourceTransactionManager     : Participating in existing transaction -> 신규 트랜잭션이 아닌 기존 트랜잭션에 참여
+        log.info("내부 트랜잭션 커밋");
+        txManager.commit(inner);    // 물리적으로 아무 일도 발생하지 않는다.(외부 트랜잭션만 물리 트랜잭션 관리 -> 실행/커밋)
+        // 트랜잭션 매니저는 신규 트랜잭션 여부에 따라 커밋 호출을 결정한다.(논리 커밋만 호출)
+
+        log.info("외부 트랜잭션 커밋");
+        txManager.commit(outer);
     }
 
 }
