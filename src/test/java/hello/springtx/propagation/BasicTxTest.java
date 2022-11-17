@@ -8,10 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionManager;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.UnexpectedRollbackException;
+import org.springframework.transaction.*;
 import org.springframework.transaction.interceptor.DefaultTransactionAttribute;
 
 import javax.sql.DataSource;
@@ -130,6 +127,29 @@ public class BasicTxTest {
         log.info("외부 트랜잭션 커밋");
         assertThatThrownBy(() -> txManager.commit(outer)).isInstanceOf(UnexpectedRollbackException.class);
         // commit을 시도했지만 기대하지 않았던 rollback이 발생했다는 예외 발생
+    }
+
+    @Test
+    void inner_rollback_requires_new() {
+        log.info("외부 트랜잭션 시작");
+        TransactionStatus outer = txManager.getTransaction(new DefaultTransactionAttribute());
+        log.info("outer.isNewTransaction()={}", outer.isNewTransaction());
+
+        log.info("내부 트랜잭션 시작");
+        DefaultTransactionAttribute definition = new DefaultTransactionAttribute();
+        definition.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        // default : PROPAGATION_REQUIRED -> 기존 트랜잭션에 참여
+        //           PROPAGATION_REQUIRES_NEW -> 기존 트랜잭션을 무시하고 새 트랜잭션 생성
+        TransactionStatus inner = txManager.getTransaction(definition);
+        // Suspending current transaction, creating new transaction with name [null]
+        // -> 현재 트랜잭션 일시 중단 후 이름이 [null]인 새로운 트랜잭션 생성
+        log.info("inner.isNewTransaction()={}", inner.isNewTransaction());  // true
+
+        log.info("내부 트랜잭션 롤백");
+        txManager.rollback(inner);
+
+        log.info("외부 트랜잭션 커밋");
+        txManager.commit(outer);
     }
 
 }
