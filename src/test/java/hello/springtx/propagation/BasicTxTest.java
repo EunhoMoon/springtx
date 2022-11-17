@@ -1,6 +1,7 @@
 package hello.springtx.propagation;
 
 import lombok.extern.slf4j.Slf4j;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,9 +11,12 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionManager;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.interceptor.DefaultTransactionAttribute;
 
 import javax.sql.DataSource;
+
+import static org.assertj.core.api.Assertions.*;
 
 @Slf4j
 @SpringBootTest
@@ -93,6 +97,39 @@ public class BasicTxTest {
 
         log.info("외부 트랜잭션 커밋");
         txManager.commit(outer);
+    }
+
+    @Test
+    void outer_rollback() {
+        log.info("외부 트랜잭션 시작");
+        TransactionStatus outer = txManager.getTransaction(new DefaultTransactionAttribute());
+
+        log.info("내부 트랜잭션 시작");
+        TransactionStatus inner = txManager.getTransaction(new DefaultTransactionAttribute());
+        log.info("내부 트랜잭션 커밋");
+        txManager.commit(inner);
+
+        log.info("외부 트랜잭션 롤백");
+        txManager.rollback(outer);
+    }
+
+    @Test
+    void inner_rollback() {
+        log.info("외부 트랜잭션 시작");
+        TransactionStatus outer = txManager.getTransaction(new DefaultTransactionAttribute());
+
+        log.info("내부 트랜잭션 시작");
+        TransactionStatus inner = txManager.getTransaction(new DefaultTransactionAttribute());
+        log.info("내부 트랜잭션 롤백");
+        txManager.rollback(inner);
+        // org.springframework.transaction.UnexpectedRollbackException: Transaction rolled back because it has been marked as rollback-only
+        // rollback-only 표시 : Participating transaction failed - marking existing transaction as rollback-only
+        log.info("inner.isRollbackOnly()={}", inner.isRollbackOnly());
+        log.info("outer.isRollbackOnly()={}", outer.isRollbackOnly());
+
+        log.info("외부 트랜잭션 커밋");
+        assertThatThrownBy(() -> txManager.commit(outer)).isInstanceOf(UnexpectedRollbackException.class);
+        // commit을 시도했지만 기대하지 않았던 rollback이 발생했다는 예외 발생
     }
 
 }
